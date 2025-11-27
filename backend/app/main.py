@@ -12,7 +12,7 @@ app = FastAPI(title="Annothem Backend")
 # 3. CORS Configuration (Allow React Frontend)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "https://annothem.onrender.com/"], # Adjust if your React port differs
+    allow_origins=["http://localhost:5173", "https://annothem.onrender.com"], # Adjust if your React port differs
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
