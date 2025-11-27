@@ -1,0 +1,11 @@
+
+frontend :-
+
+npm run dev
+
+
+backend :-
+
+.\venv\Scripts\activate  (for starting virtual environment)
+
+uvicorn main:app --reload (for starting fastapi with auto reload)
