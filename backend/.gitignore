@@ -1,1 +1,16 @@
+# 1. Virtual Environments (The likely cause of 4000+ files)
+venv/
+.venv/
+env/
+ENV/
+
+# 2. Python Cache (Junk files)
+__pycache__/
+*.pyc
+
+# 3. Environment Variables (Secrets)
 .env
+
+# 4. OS & Editor Junk
+.DS_Store
+.vscode/
