@@ -4,9 +4,9 @@ const Sidebar = ({
   labels, 
   setLabels, 
   annotations, 
-  setAnnotations, // Needed to update the annotation with a label
-  selectedIds,    // Needed to know which shape to label
-  onSelect        // Needed to select a shape from the list
+  setAnnotations, 
+  selectedIds,    
+  onSelect        
 }) => {
 
   const handleAddLabel = () => {

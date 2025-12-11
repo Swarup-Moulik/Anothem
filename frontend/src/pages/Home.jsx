@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { Download, Save, FolderOpen, X, Trash2, Menu, PanelLeft, PanelRight } from 'lucide-react'; 
+import { Download, Save, FolderOpen, X, Trash2, PanelLeft, PanelRight } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 import ToolBar from '../components/Toolbar.jsx';
 import AnnotationCanvas from '../components/AnnotationCanvas.jsx';
@@ -34,7 +34,7 @@ const Home = () => {
 
   // --- SWIPE HANDLERS ---
   const onTouchStart = (e) => {
-    touchEnd.current = null; 
+    touchEnd.current = null;
     touchStart.current = e.targetTouches[0].clientX;
   };
 
@@ -49,14 +49,12 @@ const Home = () => {
     const isRightSwipe = distance < -minSwipeDistance;
 
     if (isLeftSwipe) {
-        // Swipe Left -> Open Right Sidebar (or Close Left Toolbar)
-        if (showMobileToolbar) setShowMobileToolbar(false);
-        else setShowMobileSidebar(true);
-    } 
+      if (showMobileToolbar) setShowMobileToolbar(false);
+      else setShowMobileSidebar(true);
+    }
     if (isRightSwipe) {
-        // Swipe Right -> Open Left Toolbar (or Close Right Sidebar)
-        if (showMobileSidebar) setShowMobileSidebar(false);
-        else setShowMobileToolbar(true);
+      if (showMobileSidebar) setShowMobileSidebar(false);
+      else setShowMobileToolbar(true);
     }
   };
 
@@ -119,57 +117,57 @@ const Home = () => {
     setShowGallery(false);
   };
 
-  // --- NEW: DELETE PROJECT ---
+  // --- DELETE PROJECT ---
   const handleDeleteProject = async (e, imgId) => {
     e.stopPropagation(); // Prevent opening the project when clicking delete
     if (!window.confirm("Are you sure you want to delete this project? This cannot be undone.")) return;
 
     try {
-        const response = await fetch(`${API_URL}/images/${imgId}`, {
-            method: "DELETE"
-        });
+      const response = await fetch(`${API_URL}/images/${imgId}`, {
+        method: "DELETE"
+      });
 
-        if (response.ok) {
-            // Remove from UI immediately
-            setSavedImages(prev => prev.filter(img => img.id !== imgId));
-            
-            // If the deleted image is currently open, clear the workspace
-            if (image?.id === imgId) {
-                setImage(null);
-                setHistory([[]]);
-                setCurrentStep(0);
-            }
-        } else {
-            alert("Failed to delete project.");
+      if (response.ok) {
+        // Remove from UI immediately
+        setSavedImages(prev => prev.filter(img => img.id !== imgId));
+
+        // If the deleted image is currently open, clear the workspace
+        if (image?.id === imgId) {
+          setImage(null);
+          setHistory([[]]);
+          setCurrentStep(0);
         }
+      } else {
+        alert("Failed to delete project.");
+      }
     } catch (error) {
-        console.error("Delete Error:", error);
-        alert("Error deleting project.");
+      console.error("Delete Error:", error);
+      alert("Error deleting project.");
     }
   };
 
-  // --- 4. SAVE & EXPORT ---
+  // --- SAVE & EXPORT ---
   const handleSave = async () => {
-    if (!image?.id) { 
-        toast.error("No image loaded!"); 
-        return; 
+    if (!image?.id) {
+      toast.error("No image loaded!");
+      return;
     }
 
     // We define the fetch promise
     const savePromise = fetch(`${API_URL}/annotations/${image.id}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ data: annotations }),
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ data: annotations }),
     }).then(async (res) => {
-        if (!res.ok) throw new Error("Server error");
-        return res;
+      if (!res.ok) throw new Error("Server error");
+      return res;
     });
 
     // Use toast.promise to handle Loading -> Success/Error automatically
     toast.promise(savePromise, {
-        loading: 'Saving annotations...',
-        success: 'Project saved successfully!',
-        error: 'Failed to save.',
+      loading: 'Saving annotations...',
+      success: 'Project saved successfully!',
+      error: 'Failed to save.',
     });
   };
 
@@ -183,9 +181,9 @@ const Home = () => {
   };
 
   const handleExport = () => {
-    if (annotations.length === 0) { 
-        toast.error("No annotations to export!"); 
-        return; 
+    if (annotations.length === 0) {
+      toast.error("No annotations to export!");
+      return;
     }
     const cleanData = annotations.map(a => {
       let shapeData = {};
@@ -217,9 +215,9 @@ const Home = () => {
   const handleUndo = () => { if (currentStep > 0) setCurrentStep((p) => p - 1); };
   const handleRedo = () => { if (currentStep < history.length - 1) setCurrentStep((p) => p + 1); };
   const handleDeleteAnnotation = () => {
-    if (selectedIds.length === 0) { 
-        toast.error("Select an annotation first."); 
-        return; 
+    if (selectedIds.length === 0) {
+      toast.error("Select an annotation first.");
+      return;
     }
     const remaining = annotations.filter(a => !selectedIds.includes(a.id));
     if (remaining.length !== annotations.length) {
@@ -233,11 +231,11 @@ const Home = () => {
       <Toaster position="top-center" reverseOrder={false} />
       <header className="flex justify-between items-center px-1 md:px-4 py-2 border-b border-gray-300 bg-white shrink-0 gap-2">
         <div className="flex items-center md:gap-3">
-            {/* Mobile Toggle: Toolbar */}
-            <button className="md:hidden p-2 hover:bg-gray-100 rounded" onClick={() => setShowMobileToolbar(!showMobileToolbar)}>
-                <PanelLeft size={20} />
-            </button>
-            <div className="text-lg md:text-3xl font-bold text-gray-800 truncate">Annothem</div>
+          {/* Mobile Toggle: Toolbar */}
+          <button className="md:hidden p-2 hover:bg-gray-100 rounded" onClick={() => setShowMobileToolbar(!showMobileToolbar)}>
+            <PanelLeft size={20} />
+          </button>
+          <div className="text-lg md:text-3xl font-bold text-gray-800 truncate">Annothem</div>
         </div>
         <div className="flex items-center gap-2 md:gap-4 text-sm md:text-md">
           <button onClick={handleOpenGallery} className="flex gap-2 items-center bg-white hover:bg-gray-50 border border-gray-300 px-3 py-2 rounded-lg transition-colors text-gray-700 font-medium cursor-pointer">
@@ -251,19 +249,19 @@ const Home = () => {
           </button>
           {/* Mobile Toggle: Sidebar */}
           <button className="md:hidden p-2 hover:bg-gray-100 rounded" onClick={() => setShowMobileSidebar(!showMobileSidebar)}>
-                <PanelRight size={20} />
+            <PanelRight size={20} />
           </button>
         </div>
       </header>
 
       {/* MAIN WORKSPACE */}
-      <main 
-        className="flex flex-1 relative overflow-hidden" 
-        onTouchStart={onTouchStart} 
-        onTouchMove={onTouchMove} 
+      <main
+        className="flex flex-1 relative overflow-hidden"
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
       >
-        
+
         {/* --- TOOLBAR (Responsive) --- */}
         {/* Desktop: Static block. Mobile: Fixed slide-in drawer. */}
         <div className={`
@@ -271,16 +269,16 @@ const Home = () => {
             transform transition-transform duration-300 ease-in-out shadow-xl md:shadow-none
             ${showMobileToolbar ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
         `}>
-            <ToolBar activeTool={activeTool} setActiveTool={setActiveTool} onUndo={handleUndo} onRedo={handleRedo} onDelete={handleDeleteAnnotation} canUndo={currentStep > 0} canRedo={currentStep < history.length - 1} />
+          <ToolBar activeTool={activeTool} setActiveTool={setActiveTool} onUndo={handleUndo} onRedo={handleRedo} onDelete={handleDeleteAnnotation} canUndo={currentStep > 0} canRedo={currentStep < history.length - 1} />
         </div>
 
         {/* --- CANVAS AREA --- */}
         <div className="flex-1 relative overflow-hidden p-2 md:p-4">
-            <AnnotationCanvas 
-                image={image ? image.url : null} 
-                setImage={(file) => { if(file instanceof File) handleSetImage(file); else if (file === null) { setImage(null); setHistory([[]]); setCurrentStep(0); } }} 
-                activeTool={activeTool} annotations={annotations} setAnnotations={handleSetAnnotations} onSelectAnnotation={setSelectedIds} 
-            />
+          <AnnotationCanvas
+            image={image ? image.url : null}
+            setImage={(file) => { if (file instanceof File) handleSetImage(file); else if (file === null) { setImage(null); setHistory([[]]); setCurrentStep(0); } }}
+            activeTool={activeTool} annotations={annotations} setAnnotations={handleSetAnnotations} onSelectAnnotation={setSelectedIds}
+          />
         </div>
 
         {/* --- SIDEBAR (Responsive) --- */}
@@ -290,15 +288,15 @@ const Home = () => {
             transform transition-transform duration-300 ease-in-out shadow-xl md:shadow-none
             ${showMobileSidebar ? 'translate-x-0' : 'translate-x-full md:translate-x-0'}
         `}>
-            <Sidebar labels={labels} setLabels={setLabels} annotations={annotations} setAnnotations={handleSetAnnotations} selectedIds={selectedIds} onSelect={setSelectedIds} />
+          <Sidebar labels={labels} setLabels={setLabels} annotations={annotations} setAnnotations={handleSetAnnotations} selectedIds={selectedIds} onSelect={setSelectedIds} />
         </div>
 
         {/* Mobile Backdrop (Close menus when clicking outside) */}
         {(showMobileToolbar || showMobileSidebar) && (
-            <div 
-                className="fixed inset-0 bg-black/20 z-30 md:hidden"
-                onClick={() => { setShowMobileToolbar(false); setShowMobileSidebar(false); }}
-            />
+          <div
+            className="fixed inset-0 bg-black/20 z-30 md:hidden"
+            onClick={() => { setShowMobileToolbar(false); setShowMobileSidebar(false); }}
+          />
         )}
 
       </main>
@@ -318,14 +316,14 @@ const Home = () => {
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
                 {savedImages.map((img) => (
                   <div key={img.id} onClick={() => handleLoadProject(img)} className="group bg-white rounded-lg border shadow-sm hover:shadow-md cursor-pointer overflow-hidden transition-all hover:ring-2 ring-blue-500 relative">
-                    
+
                     {/* DELETE BUTTON */}
-                    <button 
-                        onClick={(e) => handleDeleteProject(e, img.id)}
-                        className="absolute top-2 right-2 bg-white/90 p-1.5 rounded-full text-gray-500 hover:text-red-600 hover:bg-white shadow-sm opacity-0 group-hover:opacity-100 transition-opacity z-10 cursor-pointer"
-                        title="Delete Project"
+                    <button
+                      onClick={(e) => handleDeleteProject(e, img.id)}
+                      className="absolute top-2 right-2 bg-white/90 p-1.5 rounded-full text-gray-500 hover:text-red-600 hover:bg-white shadow-sm opacity-0 group-hover:opacity-100 transition-opacity z-10 cursor-pointer"
+                      title="Delete Project"
                     >
-                        <Trash2 size={16} />
+                      <Trash2 size={16} />
                     </button>
 
                     <div className="h-40 overflow-hidden bg-gray-200 flex justify-center items-center relative">
