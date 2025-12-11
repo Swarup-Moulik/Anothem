@@ -30,8 +30,8 @@ function createVertexHandles(poly, canvas) {
 
   // remove existing handles
   poly.vertexCircles.forEach((c) => {
-    try { c.off && c.off(); } catch (e) {}
-    try { if (canvas.contains(c)) canvas.remove(c); } catch (e) {}
+    try { c.off && c.off(); } catch (e) { }
+    try { if (canvas.contains(c)) canvas.remove(c); } catch (e) { }
   });
   poly.vertexCircles.length = 0;
 
@@ -65,11 +65,11 @@ function createVertexHandles(poly, canvas) {
 
     // hover effect
     c.on("mouseover", () => { c.radius = 7; c.setCoords(); canvas.requestRenderAll(); });
-    c.on("mouseout",  () => { c.radius = 5; c.setCoords(); canvas.requestRenderAll(); });
+    c.on("mouseout", () => { c.radius = 5; c.setCoords(); canvas.requestRenderAll(); });
 
     poly.vertexCircles.push(c);
     canvas.add(c);
-    try { canvas.bringToFront(c); } catch (e) {}
+    try { canvas.bringToFront(c); } catch (e) { }
   });
 
   canvas.requestRenderAll();
@@ -80,14 +80,14 @@ function enableVertexDragging(poly, canvas) {
   if (!poly.vertexCircles) return;
 
   poly.vertexCircles.forEach((circle) => {
-    try { circle.off && circle.off("moving"); } catch (e) {}
+    try { circle.off && circle.off("moving"); } catch (e) { }
 
     // remove temp lines when drag starts (prevent ghosts)
     circle.on("mousedown", () => {
       // remove temp visuals
       canvas.getObjects().slice().forEach((o) => {
         if (o.id === "temp-line" || o.id === "temp-point") {
-          try { canvas.remove(o); } catch (e) {}
+          try { canvas.remove(o); } catch (e) { }
         }
       });
     });
@@ -120,16 +120,16 @@ function enableVertexDragging(poly, canvas) {
       canvas.requestRenderAll();
 
       // notify component (debounced save is handled in component)
-      try { canvas.fire("vertex:modified"); } catch (e) {}
+      try { canvas.fire("vertex:modified"); } catch (e) { }
     });
   });
 
   // cleanup when polygon removed
-  try { poly.off && poly.off("removed"); } catch (e) {}
+  try { poly.off && poly.off("removed"); } catch (e) { }
   poly.on("removed", () => {
     if (!poly.vertexCircles) return;
     poly.vertexCircles.forEach((c) => {
-      try { c.off && c.off(); if (canvas.contains(c)) canvas.remove(c); } catch (e) {}
+      try { c.off && c.off(); if (canvas.contains(c)) canvas.remove(c); } catch (e) { }
     });
     poly.vertexCircles = [];
   });
@@ -155,11 +155,11 @@ function syncVertexPositions(poly) {
 /* colors */
 const COLORS = {
   rectangle: { stroke: "#ef4444", fill: "rgba(239, 68, 68, 0.2)" },
-  circle:    { stroke: "#10b981", fill: "rgba(16, 185, 129, 0.2)" },
-  polygon:   { stroke: "#8b5cf6", fill: "rgba(139, 92, 246, 0.2)" },
-  point:     { stroke: "transparent", fill: "#f59e0b" },
-  text:      { stroke: "transparent", fill: "#111827" },
-  freehand:  { stroke: "#3b82f6", fill: "transparent" },
+  circle: { stroke: "#10b981", fill: "rgba(16, 185, 129, 0.2)" },
+  polygon: { stroke: "#8b5cf6", fill: "rgba(139, 92, 246, 0.2)" },
+  point: { stroke: "transparent", fill: "#f59e0b" },
+  text: { stroke: "transparent", fill: "#111827" },
+  freehand: { stroke: "#3b82f6", fill: "transparent" },
 };
 
 const AnnotationCanvas = ({ image, setImage, activeTool, annotations, setAnnotations, onSelectAnnotation }) => {
@@ -202,7 +202,7 @@ const AnnotationCanvas = ({ image, setImage, activeTool, annotations, setAnnotat
       canvas.requestRenderAll();
     });
 
-    return () => { try { canvas.dispose(); } catch (e) {} fabricRef.current = null; };
+    return () => { try { canvas.dispose(); } catch (e) { } fabricRef.current = null; };
   }, [image]);
 
   /* save/restore */
@@ -318,7 +318,7 @@ const AnnotationCanvas = ({ image, setImage, activeTool, annotations, setAnnotat
     if (!canvas || !image) return;
     const url = typeof image === "string" ? image : URL.createObjectURL(image);
     fabric.Image.fromURL(url, (img) => {
-      canvas.setViewportTransform([1,0,0,1,0,0]);
+      canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
       canvas.setWidth(img.width); canvas.setHeight(img.height);
       setDims({ width: img.width, height: img.height });
       const bg = img; bg.set({ selectable: false, evented: false, id: "backgroundImage" });
@@ -353,15 +353,20 @@ const AnnotationCanvas = ({ image, setImage, activeTool, annotations, setAnnotat
       if (obj.type === "polygon" || obj instanceof EditablePolygon) {
         if (!obj.vertexCircles || obj.vertexCircles.length === 0) {
           createVertexHandles(obj, canvas);
-          syncVertexPositions(obj);
+          enableVertexDragging(obj, canvas);
         } else {
           syncVertexPositions(obj);
         }
-        const isActive = activePolygonRef.current && activePolygonRef.current.id === obj.id;
-        if (obj.vertexCircles) obj.vertexCircles.forEach(c => c.set({ visible: isActive, selectable: isActive }));
-        obj.set({ selectable: isSelect });
+
+        // Show handles only if in select mode or just created
+        const isEditable = activeTool === "select" || (activePolygonRef.current && activePolygonRef.current.id === obj.id);
+        obj.vertexCircles.forEach(c => c.set({ visible: isEditable, selectable: isEditable }));
+
+        // lock polygon itself while editing vertices
+        obj.set({ selectable: activeTool !== "select", lockMovementX: true, lockMovementY: true });
       }
     });
+
 
     switch (activeTool) {
       case "select": canvas.selection = true; break;
@@ -386,7 +391,7 @@ const AnnotationCanvas = ({ image, setImage, activeTool, annotations, setAnnotat
           if (activePolygonRef.current && activePolygonRef.current !== opt.target) {
             const prev = activePolygonRef.current;
             if (prev.vertexCircles) {
-              prev.vertexCircles.forEach(c => { try { c.off && c.off(); if (canvas.contains(c)) canvas.remove(c); } catch (e) {} });
+              prev.vertexCircles.forEach(c => { try { c.off && c.off(); if (canvas.contains(c)) canvas.remove(c); } catch (e) { } });
               prev.vertexCircles = [];
             }
           }
@@ -404,7 +409,7 @@ const AnnotationCanvas = ({ image, setImage, activeTool, annotations, setAnnotat
           if (activePolygonRef.current) {
             const prev = activePolygonRef.current;
             if (prev.vertexCircles) {
-              prev.vertexCircles.forEach(c => { try { c.off && c.off(); if (canvas.contains(c)) canvas.remove(c); } catch (e) {} });
+              prev.vertexCircles.forEach(c => { try { c.off && c.off(); if (canvas.contains(c)) canvas.remove(c); } catch (e) { } });
               prev.vertexCircles = [];
             }
             activePolygonRef.current = null;
@@ -488,10 +493,10 @@ const AnnotationCanvas = ({ image, setImage, activeTool, annotations, setAnnotat
         const poly = activePolygonRef.current;
         if (poly && canvas) {
           if (poly.vertexCircles) {
-            poly.vertexCircles.forEach(c => { try { c.off && c.off(); if (canvas.contains(c)) canvas.remove(c); } catch (err) {} });
+            poly.vertexCircles.forEach(c => { try { c.off && c.off(); if (canvas.contains(c)) canvas.remove(c); } catch (err) { } });
             poly.vertexCircles = [];
           }
-          try { canvas.remove(poly); } catch (err) {}
+          try { canvas.remove(poly); } catch (err) { }
           activePolygonRef.current = null;
           if (saveAnnotationsRef.current) saveAnnotationsRef.current();
         }
@@ -530,6 +535,11 @@ const AnnotationCanvas = ({ image, setImage, activeTool, annotations, setAnnotat
     enableVertexDragging(poly, canvas);
     syncVertexPositions(poly);
     poly.vertexCircles.forEach(c => c.set({ visible: true, selectable: true }));
+    // show handles since just created
+    poly.vertexCircles.forEach(c => c.set({ visible: true, selectable: true }));
+
+    // lock polygon itself
+    poly.set({ selectable: false, lockMovementX: true, lockMovementY: true });
 
     if (saveAnnotationsRef.current) saveAnnotationsRef.current();
   }
@@ -538,7 +548,7 @@ const AnnotationCanvas = ({ image, setImage, activeTool, annotations, setAnnotat
   function makePolygonEditableLocal(poly) {
     const canvas = fabricRef.current;
     if (!canvas || !poly) return;
-    try { poly.off && poly.off("moving"); poly.off && poly.off("scaling"); poly.off && poly.off("rotating"); } catch (e) {}
+    try { poly.off && poly.off("moving"); poly.off && poly.off("scaling"); poly.off && poly.off("rotating"); } catch (e) { }
 
     poly.hasBorders = false; poly.hasControls = false; poly.drawOutline(false);
 
