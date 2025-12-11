@@ -8,7 +8,8 @@ import Sidebar from '../components/Sidebar.jsx';
 const API_URL = import.meta.env.VITE_API_URL;
 
 const Home = () => {
-  const [image, setImage] = useState(null);
+  const [image, setImage] = useState(null); // { id, url, name } - id absent for local-only images
+  const [unsavedFile, setUnsavedFile] = useState(null); // store the File until Save
   const [activeTool, setActiveTool] = useState('select');
   const [labels, setLabels] = useState(['Person', 'Car', 'Building']);
   const [selectedIds, setSelectedIds] = useState([]);
@@ -58,32 +59,41 @@ const Home = () => {
     }
   };
 
-  // --- 1. UPLOAD IMAGE ---
-  const handleSetImage = async (file) => {
+  // --- 1. SELECT IMAGE (client-side only) ---
+  // This no longer uploads immediately. It keeps the file client-side until Save.
+  const handleLocalSelectImage = (file) => {
     if (!file) return;
-    const toastId = toast.loading("Uploading image...");
-    const formData = new FormData();
-    formData.append("file", file);
+    // Revoke previous unsaved preview if any
+    if (unsavedFile?.previewUrl) URL.revokeObjectURL(unsavedFile.previewUrl);
 
-    try {
-      const response = await fetch(`${API_URL}/images/upload`, {
-        method: "POST",
-        body: formData,
-      });
-      if (!response.ok) throw new Error("Upload failed");
-      const data = await response.json();
-      setImage({ id: data.id, url: data.public_url, name: data.filename });
-      setHistory([[]]); setCurrentStep(0); setSelectedIds([]);
-      toast.success("Image uploaded!", { id: toastId });
-    } catch (error) {
-      console.error("Error uploading:", error);
-      toast.error("Failed to upload image.", { id: toastId });
-    }
+    const previewUrl = URL.createObjectURL(file);
+    setUnsavedFile({ file, previewUrl });
+    // image state stores a local preview and no id (so Save will trigger upload)
+    setImage({ id: null, url: previewUrl, name: file.name });
+    // reset annotation history for new image
+    setHistory([[]]); setCurrentStep(0); setSelectedIds([]);
   };
 
-  // --- 2. LOAD ANNOTATIONS ---
+  // --- 2. UPLOAD IMAGE helper (used by Save) ---
+  const uploadImageToServer = async (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const resp = await fetch(`${API_URL}/images/upload`, {
+      method: 'POST',
+      body: formData
+    });
+
+    if (!resp.ok) {
+      const txt = await resp.text().catch(() => 'Upload failed');
+      throw new Error(txt || 'Upload failed');
+    }
+    return resp.json(); // expect { id, public_url, filename, ... }
+  };
+
+  // --- 3. LOAD ANNOTATIONS (only when image.id exists on server) ---
   useEffect(() => {
-    if (!image?.id) return;
+    if (!image?.id) return; // do not fetch annotations for local-only images
     const fetchAnnotations = async () => {
       try {
         const response = await fetch(`${API_URL}/annotations/${image.id}`);
@@ -96,7 +106,7 @@ const Home = () => {
     fetchAnnotations();
   }, [image?.id]);
 
-  // --- 3. GALLERY LOGIC ---
+  // --- 4. GALLERY LOGIC ---
   const fetchGallery = async () => {
     try {
       const response = await fetch(`${API_URL}/images/`);
@@ -113,13 +123,18 @@ const Home = () => {
   };
 
   const handleLoadProject = (imgData) => {
+    // If a local preview was present, revoke it and clear unsavedFile
+    if (unsavedFile?.previewUrl) URL.revokeObjectURL(unsavedFile.previewUrl);
+    setUnsavedFile(null);
+
     setImage({ id: imgData.id, url: imgData.public_url, name: imgData.filename });
     setShowGallery(false);
+    // annotations will be loaded by the effect that watches image.id
   };
 
   // --- DELETE PROJECT ---
   const handleDeleteProject = async (e, imgId) => {
-    e.stopPropagation(); // Prevent opening the project when clicking delete
+    e.stopPropagation();
     if (!window.confirm("Are you sure you want to delete this project? This cannot be undone.")) return;
 
     try {
@@ -128,10 +143,7 @@ const Home = () => {
       });
 
       if (response.ok) {
-        // Remove from UI immediately
         setSavedImages(prev => prev.filter(img => img.id !== imgId));
-
-        // If the deleted image is currently open, clear the workspace
         if (image?.id === imgId) {
           setImage(null);
           setHistory([[]]);
@@ -148,27 +160,55 @@ const Home = () => {
 
   // --- SAVE & EXPORT ---
   const handleSave = async () => {
-    if (!image?.id) {
+    // If no image at all
+    if (!image) {
       toast.error("No image loaded!");
       return;
     }
 
-    // We define the fetch promise
-    const savePromise = fetch(`${API_URL}/annotations/${image.id}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ data: annotations }),
-    }).then(async (res) => {
-      if (!res.ok) throw new Error("Server error");
-      return res;
-    });
+    // If image not yet uploaded (local preview), upload first, then save annotations
+    const doSave = async () => {
+      try {
+        let serverImage = image;
 
-    // Use toast.promise to handle Loading -> Success/Error automatically
-    toast.promise(savePromise, {
-      loading: 'Saving annotations...',
-      success: 'Project saved successfully!',
-      error: 'Failed to save.',
-    });
+        if (!image.id) {
+          // Need to upload local file
+          if (!unsavedFile?.file) throw new Error("No local file to upload.");
+          const uploadToast = toast.loading("Uploading image...");
+          try {
+            const uploaded = await uploadImageToServer(unsavedFile.file);
+            // uploaded expected: { id, public_url, filename, ... }
+            serverImage = { id: uploaded.id, url: uploaded.public_url, name: uploaded.filename };
+            setImage(serverImage);
+            // clean up local preview (we now use server URL)
+            if (unsavedFile?.previewUrl) URL.revokeObjectURL(unsavedFile.previewUrl);
+            setUnsavedFile(null);
+            toast.success("Image uploaded!", { id: uploadToast });
+          } catch (err) {
+            toast.error("Image upload failed.", { id: uploadToast });
+            throw err;
+          }
+        }
+
+        // Now save annotations to server for serverImage.id
+        const saveToast = toast.loading("Saving annotations...");
+        const resp = await fetch(`${API_URL}/annotations/${serverImage.id}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ data: annotations }),
+        });
+        if (!resp.ok) {
+          throw new Error("Failed to save annotations");
+        }
+        toast.success("Project saved successfully!", { id: saveToast });
+      } catch (err) {
+        console.error("Save error:", err);
+        toast.error("Failed to save project.");
+      }
+    };
+
+    // run save
+    await doSave();
   };
 
   const downloadFile = (content, fileName, contentType) => {
@@ -226,6 +266,13 @@ const Home = () => {
     }
   };
 
+  // cleanup local preview URL on unmount
+  useEffect(() => {
+    return () => {
+      if (unsavedFile?.previewUrl) URL.revokeObjectURL(unsavedFile.previewUrl);
+    };
+  }, [unsavedFile]);
+
   return (
     <div className="bg-gray-50 min-h-screen flex flex-col relative">
       <Toaster position="top-center" reverseOrder={false} />
@@ -263,7 +310,6 @@ const Home = () => {
       >
 
         {/* --- TOOLBAR (Responsive) --- */}
-        {/* Desktop: Static block. Mobile: Fixed slide-in drawer. */}
         <div className={`
             fixed md:static inset-y-0 left-0 z-40 w-16 md:m-4
             transform transition-transform duration-300 ease-in-out shadow-xl md:shadow-none
@@ -276,13 +322,24 @@ const Home = () => {
         <div className="flex-1 relative overflow-hidden p-2 md:p-4">
           <AnnotationCanvas
             image={image ? image.url : null}
-            setImage={(file) => { if (file instanceof File) handleSetImage(file); else if (file === null) { setImage(null); setHistory([[]]); setCurrentStep(0); } }}
+            // setImage receives either File or null (to close). If File -> keep locally (no upload).
+            setImage={(fileOrNull) => {
+              if (fileOrNull instanceof File) handleLocalSelectImage(fileOrNull);
+              else if (fileOrNull === null) {
+                // user closed canvas; revoke local preview if any
+                if (unsavedFile?.previewUrl) URL.revokeObjectURL(unsavedFile.previewUrl);
+                setUnsavedFile(null);
+                setImage(null);
+                setHistory([[]]);
+                setCurrentStep(0);
+                setSelectedIds([]);
+              }
+            }}
             activeTool={activeTool} annotations={annotations} setAnnotations={handleSetAnnotations} onSelectAnnotation={setSelectedIds}
           />
         </div>
 
         {/* --- SIDEBAR (Responsive) --- */}
-        {/* Desktop: Static block. Mobile: Fixed slide-in drawer. */}
         <div className={`
             fixed md:static inset-y-0 right-0 z-40 w-80 md:m-4
             transform transition-transform duration-300 ease-in-out shadow-xl md:shadow-none
@@ -291,7 +348,6 @@ const Home = () => {
           <Sidebar labels={labels} setLabels={setLabels} annotations={annotations} setAnnotations={handleSetAnnotations} selectedIds={selectedIds} onSelect={setSelectedIds} />
         </div>
 
-        {/* Mobile Backdrop (Close menus when clicking outside) */}
         {(showMobileToolbar || showMobileSidebar) && (
           <div
             className="fixed inset-0 bg-black/20 z-30 md:hidden"
@@ -316,8 +372,6 @@ const Home = () => {
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
                 {savedImages.map((img) => (
                   <div key={img.id} onClick={() => handleLoadProject(img)} className="group bg-white rounded-lg border shadow-sm hover:shadow-md cursor-pointer overflow-hidden transition-all hover:ring-2 ring-blue-500 relative">
-
-                    {/* DELETE BUTTON */}
                     <button
                       onClick={(e) => handleDeleteProject(e, img.id)}
                       className="absolute top-2 right-2 bg-white/90 p-1.5 rounded-full text-gray-500 hover:text-red-600 hover:bg-white shadow-sm opacity-0 group-hover:opacity-100 transition-opacity z-10 cursor-pointer"
