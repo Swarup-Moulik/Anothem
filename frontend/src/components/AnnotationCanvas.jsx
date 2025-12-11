@@ -77,61 +77,31 @@ function createVertexHandles(poly, canvas) {
 
 /* enable vertex dragging — FIXED: use inverse transform mapping screen -> polygon local */
 function enableVertexDragging(poly, canvas) {
-  if (!poly.vertexCircles) return;
+  if (!poly.vertexCircles || poly.vertexCircles.length === 0) return;
 
   poly.vertexCircles.forEach((circle) => {
-    try { circle.off && circle.off("moving"); } catch (e) { }
+    circle.set({ lockMovementX: false, lockMovementY: false, hasControls: false, hasBorders: false });
 
-    // remove temp lines when drag starts (prevent ghosts)
-    circle.on("mousedown", () => {
-      // remove temp visuals
-      canvas.getObjects().slice().forEach((o) => {
-        if (o.id === "temp-line" || o.id === "temp-point") {
-          try { canvas.remove(o); } catch (e) { }
-        }
-      });
-    });
-
+    // remove old handlers to avoid duplication
+    circle.off("moving");
     circle.on("moving", () => {
       const idx = circle.pointIndex;
       if (idx == null) return;
 
-      // Convert screen (circle.left/top) -> polygon local coordinates precisely:
-      // 1) get polygon transform matrix (local -> screen)
-      // 2) invert it, transform screen point to polygon local space
       const screenPoint = new fabric.Point(circle.left, circle.top);
       const m = poly.calcTransformMatrix();
       const inv = fabric.util.invertTransform(m);
       const local = fabric.util.transformPoint(screenPoint, inv);
-
       const ox = poly.pathOffset?.x || 0;
       const oy = poly.pathOffset?.y || 0;
 
-      // update polygon internal point (points are stored relative to pathOffset)
       poly.points[idx].x = local.x + ox;
       poly.points[idx].y = local.y + oy;
 
-      poly.dirty = true;
-      poly.setCoords();
-
-      // reposition all handles according to updated polygon
       syncVertexPositions(poly);
-
       canvas.requestRenderAll();
-
-      // notify component (debounced save is handled in component)
-      try { canvas.fire("vertex:modified"); } catch (e) { }
+      canvas.fire("vertex:modified");
     });
-  });
-
-  // cleanup when polygon removed
-  try { poly.off && poly.off("removed"); } catch (e) { }
-  poly.on("removed", () => {
-    if (!poly.vertexCircles) return;
-    poly.vertexCircles.forEach((c) => {
-      try { c.off && c.off(); if (canvas.contains(c)) canvas.remove(c); } catch (e) { }
-    });
-    poly.vertexCircles = [];
   });
 }
 
@@ -360,7 +330,12 @@ const AnnotationCanvas = ({ image, setImage, activeTool, annotations, setAnnotat
 
         // Show handles only if in select mode or just created
         const isEditable = activeTool === "select" || (activePolygonRef.current && activePolygonRef.current.id === obj.id);
-        obj.vertexCircles.forEach(c => c.set({ visible: isEditable, selectable: isEditable }));
+        obj.vertexCircles.forEach(c => c.set({
+          visible: true,
+          selectable: true,
+          evented: true,  // <--- ensure events propagate
+          hoverCursor: "pointer"
+        }));
 
         // lock polygon itself while editing vertices
         obj.set({ selectable: activeTool !== "select", lockMovementX: true, lockMovementY: true });
@@ -400,7 +375,7 @@ const AnnotationCanvas = ({ image, setImage, activeTool, annotations, setAnnotat
           if (!opt.target.vertexCircles || opt.target.vertexCircles.length === 0) { createVertexHandles(opt.target, canvas); syncVertexPositions(opt.target); }
           opt.target.vertexCircles.forEach(c => c.set({ visible: true, selectable: true }));
           // lock polygon movement while editing vertices
-          opt.target.set({ selectable: false, lockMovementX: true, lockMovementY: true });
+          opt.target.set({ selectable: false, evented: false, lockMovementX: true, lockMovementY: true });
           enableVertexDragging(opt.target, canvas); // ensure handlers attached
           canvas.requestRenderAll();
           return;
