@@ -177,6 +177,8 @@ const AnnotationCanvas = ({ image, setImage, activeTool, annotations, setAnnotat
   const isInternalUpdate = useRef(false);
   const saveAnnotationsRef = useRef(null);
   const activeToolRef = useRef(activeTool);
+  const prevToolRef = useRef(activeTool);           
+  const polyLockedRef = useRef(false);  
   const activePolygonRef = useRef(null);
 
   const isDragging = useRef(false);
@@ -187,7 +189,15 @@ const AnnotationCanvas = ({ image, setImage, activeTool, annotations, setAnnotat
 
   const [dims, setDims] = useState({ width: 800, height: 600 });
 
-  useEffect(() => { activeToolRef.current = activeTool; }, [activeTool]);
+  useEffect(() => {
+    // If user changed tool and now it's polygon and previously it wasn't polygon -> unlock
+    if (activeTool === "polygon" && prevToolRef.current !== "polygon") {
+      polyLockedRef.current = false;
+      polyPoints.current = [];
+    }
+    prevToolRef.current = activeTool;
+    activeToolRef.current = activeTool;
+  }, [activeTool]);
 
   /* init canvas */
   useEffect(() => {
@@ -258,7 +268,6 @@ const AnnotationCanvas = ({ image, setImage, activeTool, annotations, setAnnotat
           }
         }
       });
-
       canvas.requestRenderAll();
     }
 
@@ -384,8 +393,6 @@ const AnnotationCanvas = ({ image, setImage, activeTool, annotations, setAnnotat
       }
     });
 
-
-
     switch (activeTool) {
       case "select": canvas.selection = true; break;
       case "pan": canvas.defaultCursor = "grab"; break;
@@ -506,6 +513,9 @@ const AnnotationCanvas = ({ image, setImage, activeTool, annotations, setAnnotat
       }
 
       if (activeTool === "polygon") {
+        if (polyLockedRef.current) {
+          return;
+        }
         if (polyPoints.current.length > 2) {
           const start = polyPoints.current[0];
           const dist = Math.hypot(pointer.x - start.x, pointer.y - start.y);
@@ -630,7 +640,7 @@ const AnnotationCanvas = ({ image, setImage, activeTool, annotations, setAnnotat
     canvas.bringToFront(poly);
     // lock polygon itself
     poly.set({ selectable: false, lockMovementX: true, lockMovementY: true });
-
+    polyLockedRef.current = true;
     if (saveAnnotationsRef.current) saveAnnotationsRef.current();
   }
 
