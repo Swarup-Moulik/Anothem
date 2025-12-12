@@ -1,4 +1,4 @@
-import { Plus, Tag, Trash2, MousePointer2 } from 'lucide-react';
+import { Plus, Tag, Trash2, MousePointer2, Download } from 'lucide-react';
 
 const Sidebar = ({ 
   labels, 
@@ -42,6 +42,34 @@ const Sidebar = ({
     e.stopPropagation(); // Prevent triggering selection
     const updated = annotations.filter(a => a.id !== id);
     setAnnotations(updated);
+  };
+
+  // Helper: Download single annotation as JSON
+  const downloadAnnotation = (e, annotation, index) => {
+    e.stopPropagation();
+    const payload = {
+      id: annotation.id,
+      type: annotation.type,
+      label: annotation.label || null,
+      data: (() => {
+        if (annotation.type === 'polygon') return { points: annotation.points };
+        if (annotation.type === 'rectangle') return { x: Math.round(annotation.x), y: Math.round(annotation.y), width: Math.round((annotation.width || 0) * (annotation.scaleX || 1)), height: Math.round((annotation.height || 0) * (annotation.scaleY || 1)) };
+        if (annotation.type === 'circle') return { x: Math.round(annotation.x), y: Math.round(annotation.y), radius: Math.round(annotation.radius || 0) };
+        if (annotation.type === 'point') return { x: Math.round(annotation.x), y: Math.round(annotation.y) };
+        if (annotation.type === 'text') return { text: annotation.text };
+        if (annotation.type === 'freehand') return { path: annotation.path };
+        return { raw: annotation };
+      })(),
+      meta: { exported_at: new Date().toISOString() }
+    };
+
+    const fileName = `annotation_${annotation.id || index + 1}_${annotation.type || 'shape'}.json`;
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = fileName;
+    a.click();
+    URL.revokeObjectURL(a.href);
   };
 
   const formatType = (type) => {
@@ -131,17 +159,28 @@ const Sidebar = ({
                     )}
                   </div>
 
-                  {/* Delete Button (Visible on Hover or Selected) */}
-                  <button 
-                    onClick={(e) => deleteSingle(e, annotation.id)}
-                    className={`
-                      p-1.5 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors cursor-pointer
-                      ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}
-                    `}
-                    title="Delete"
-                  >
-                    <Trash2 size={16} />
-                  </button>
+                  <div className='flex items-center gap-2'>
+                    {/* Download button */}
+                    <button
+                      onClick={(e) => downloadAnnotation(e, annotation, index)}
+                      className={`p-1.5 rounded text-gray-400 hover:text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                      title="Download annotation"
+                    >
+                      <Download size={16} />
+                    </button>
+
+                    {/* Delete Button (Visible on Hover or Selected) */}
+                    <button 
+                      onClick={(e) => deleteSingle(e, annotation.id)}
+                      className={`
+                        p-1.5 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors cursor-pointer
+                        ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}
+                      `}
+                      title="Delete"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
                 </div>
               );
             })
