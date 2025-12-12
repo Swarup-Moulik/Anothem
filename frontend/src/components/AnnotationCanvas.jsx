@@ -416,7 +416,11 @@ const AnnotationCanvas = ({ image, setImage, activeTool, annotations, setAnnotat
           activePolygonRef.current = opt.target;
           // prepare and show handles
           if (!opt.target.vertexCircles || opt.target.vertexCircles.length === 0) { createVertexHandles(opt.target, canvas); syncVertexPositions(opt.target); }
-          opt.target.vertexCircles.forEach(c => c.set({ visible: true, selectable: true }));
+          opt.target.vertexCircles.forEach(c => {
+            c.set({ visible: true, selectable: true, evented: true });
+            canvas.bringToFront(c);      // <<< CRITICAL FIX
+          });
+          canvas.bringToFront(opt.target);  // keeps polygon above image too
           // lock polygon movement while editing vertices
           opt.target.set({ selectable: false, evented: false, lockMovementX: true, lockMovementY: true });
           enableVertexDragging(opt.target, canvas); // ensure handlers attached
@@ -552,10 +556,11 @@ const AnnotationCanvas = ({ image, setImage, activeTool, annotations, setAnnotat
     createVertexHandles(poly, canvas);
     enableVertexDragging(poly, canvas);
     syncVertexPositions(poly);
-    poly.vertexCircles.forEach(c => c.set({ visible: true, selectable: true }));
-    // show handles since just created
-    poly.vertexCircles.forEach(c => c.set({ visible: true, selectable: true }));
-
+    poly.vertexCircles.forEach(c => {
+      c.set({ visible: true, selectable: true, evented: true });
+      canvas.bringToFront(c);
+    });
+    canvas.bringToFront(poly);
     // lock polygon itself
     poly.set({ selectable: false, lockMovementX: true, lockMovementY: true });
 
