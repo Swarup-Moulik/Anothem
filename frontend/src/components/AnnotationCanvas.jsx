@@ -404,39 +404,90 @@ const AnnotationCanvas = ({ image, setImage, activeTool, annotations, setAnnotat
       if (activeTool === "pan") { isDragging.current = true; canvas.setCursor("grabbing"); lastPosX.current = evt.clientX; lastPosY.current = evt.clientY; return; }
 
       if (activeTool === "select") {
-        if (opt.target && (opt.target.type === "polygon" || opt.target instanceof EditablePolygon)) {
-          // clear previous active polygon handles
-          if (activePolygonRef.current && activePolygonRef.current !== opt.target) {
-            const prev = activePolygonRef.current;
-            if (prev.vertexCircles) {
-              prev.vertexCircles.forEach(c => { try { c.off && c.off(); if (canvas.contains(c)) canvas.remove(c); } catch (e) { } });
-              prev.vertexCircles = [];
+        // If user clicked on something
+        if (opt.target) {
+          // 1) Clicked a vertex handle itself
+          if (opt.target._isVertex) {
+            // find parent polygon by id (stored on the handle)
+            const parentId = opt.target._parentPolygonId;
+            const parent = canvas.getObjects().find(o => o.id === parentId);
+            if (parent) {
+              // mark active polygon
+              activePolygonRef.current = parent;
+
+              // Ensure handles exist and handlers are attached
+              if (!parent.vertexCircles || parent.vertexCircles.length === 0) {
+                createVertexHandles(parent, canvas);
+                syncVertexPositions(parent);
+                enableVertexDragging(parent, canvas);
+              } else {
+                syncVertexPositions(parent);
+                enableVertexDragging(parent, canvas); // reattach handlers if needed
+              }
+
+              // Show & enable handles (and bring them to front so they receive pointer events)
+              parent.vertexCircles.forEach(c => {
+                c.set({ visible: true, selectable: true, evented: true });
+                try { canvas.bringToFront(c); } catch (e) { /* ignore */ }
+              });
+
+              // Keep polygon above background (so handles are on top visually)
+              try { canvas.bringToFront(parent); } catch (e) { /* ignore */ }
+
+              // Do NOT clear handles — allow the handle's own mousedown/move sequence to proceed.
+              // Return early so we don't run the "clear active polygon" code below.
+              return;
             }
           }
-          activePolygonRef.current = opt.target;
-          // prepare and show handles
-          if (!opt.target.vertexCircles || opt.target.vertexCircles.length === 0) { createVertexHandles(opt.target, canvas); syncVertexPositions(opt.target); }
-          opt.target.vertexCircles.forEach(c => {
-            c.set({ visible: true, selectable: true, evented: true });
-            canvas.bringToFront(c);      // <<< CRITICAL FIX
-          });
-          canvas.bringToFront(opt.target);  // keeps polygon above image too
-          // lock polygon movement while editing vertices
-          opt.target.set({ selectable: false, evented: false, lockMovementX: true, lockMovementY: true });
-          enableVertexDragging(opt.target, canvas); // ensure handlers attached
-          canvas.requestRenderAll();
-          return;
-        } else {
-          // clicked elsewhere -> clear active polygon
-          if (activePolygonRef.current) {
-            const prev = activePolygonRef.current;
-            if (prev.vertexCircles) {
-              prev.vertexCircles.forEach(c => { try { c.off && c.off(); if (canvas.contains(c)) canvas.remove(c); } catch (e) { } });
-              prev.vertexCircles = [];
+
+          // 2) Clicked the polygon body -> activate its handles (user wants to edit vertices)
+          if (opt.target.type === "polygon" || opt.target instanceof EditablePolygon) {
+            // clear any previous active polygon first
+            if (activePolygonRef.current && activePolygonRef.current !== opt.target) {
+              const prev = activePolygonRef.current;
+              if (prev.vertexCircles) {
+                prev.vertexCircles.forEach(c => { try { c.off && c.off(); if (canvas.contains(c)) canvas.remove(c); } catch (e) { } });
+                prev.vertexCircles = [];
+              }
             }
-            activePolygonRef.current = null;
+
+            activePolygonRef.current = opt.target;
+
+            if (!opt.target.vertexCircles || opt.target.vertexCircles.length === 0) {
+              createVertexHandles(opt.target, canvas);
+              syncVertexPositions(opt.target);
+              enableVertexDragging(opt.target, canvas);
+            } else {
+              syncVertexPositions(opt.target);
+              enableVertexDragging(opt.target, canvas);
+            }
+
+            opt.target.vertexCircles.forEach(c => {
+              c.set({ visible: true, selectable: true, evented: true });
+              try { canvas.bringToFront(c); } catch (e) { }
+            });
+            try { canvas.bringToFront(opt.target); } catch (e) { }
+
+            // lock polygon movement while editing vertices
+            opt.target.set({ selectable: false, evented: false, lockMovementX: true, lockMovementY: true });
+
             canvas.requestRenderAll();
+            // handled the click — return so we don't clear handles
+            return;
           }
+
+          // 3) Clicked some other selectable object — fall through to "clear active polygon" logic below
+        }
+
+        // Clicked empty space or some non-polygon target: clear active polygon and its handles
+        if (activePolygonRef.current) {
+          const prev = activePolygonRef.current;
+          if (prev.vertexCircles) {
+            prev.vertexCircles.forEach(c => { try { c.off && c.off(); if (canvas.contains(c)) canvas.remove(c); } catch (e) { } });
+            prev.vertexCircles = [];
+          }
+          activePolygonRef.current = null;
+          canvas.requestRenderAll();
         }
         return;
       }
