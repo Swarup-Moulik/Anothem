@@ -442,14 +442,21 @@ const AnnotationCanvas = ({ image, setImage, activeTool, annotations, setAnnotat
 
           // 2) Clicked the polygon body -> activate its handles (user wants to edit vertices)
           if (opt.target.type === "polygon" || opt.target instanceof EditablePolygon) {
-            // clear any previous active polygon first
+            // clear previous active polygon handles — HIDE (keep objects)
             if (activePolygonRef.current && activePolygonRef.current !== opt.target) {
               const prev = activePolygonRef.current;
               if (prev.vertexCircles) {
-                prev.vertexCircles.forEach(c => { try { c.off && c.off(); if (canvas.contains(c)) canvas.remove(c); } catch (e) { } });
-                prev.vertexCircles = [];
+                prev.vertexCircles.forEach(c => {
+                  try {
+                    // don't remove; just hide and disable eventing so we can reuse them later
+                    c.set({ visible: false, selectable: false, evented: false });
+                  } catch (e) { /* ignore */ }
+                });
               }
+              // restore polygon to selectable for later clicks
+              try { prev.set({ selectable: true, evented: true, lockMovementX: false, lockMovementY: false }); } catch (e) { }
             }
+
 
             activePolygonRef.current = opt.target;
 
@@ -479,16 +486,22 @@ const AnnotationCanvas = ({ image, setImage, activeTool, annotations, setAnnotat
           // 3) Clicked some other selectable object — fall through to "clear active polygon" logic below
         }
 
-        // Clicked empty space or some non-polygon target: clear active polygon and its handles
+        // Clicked empty space or non-polygon target: hide previously active polygon handles
         if (activePolygonRef.current) {
           const prev = activePolygonRef.current;
           if (prev.vertexCircles) {
-            prev.vertexCircles.forEach(c => { try { c.off && c.off(); if (canvas.contains(c)) canvas.remove(c); } catch (e) { } });
-            prev.vertexCircles = [];
+            prev.vertexCircles.forEach(c => {
+              try {
+                c.set({ visible: false, selectable: false, evented: false });
+              } catch (e) { /* ignore */ }
+            });
           }
+          // restore polygon to normal (allow selecting it later)
+          try { prev.set({ selectable: true, evented: true, lockMovementX: false, lockMovementY: false }); } catch (e) { }
           activePolygonRef.current = null;
           canvas.requestRenderAll();
         }
+
         return;
       }
 
@@ -566,13 +579,16 @@ const AnnotationCanvas = ({ image, setImage, activeTool, annotations, setAnnotat
         const poly = activePolygonRef.current;
         if (poly && canvas) {
           if (poly.vertexCircles) {
-            poly.vertexCircles.forEach(c => { try { c.off && c.off(); if (canvas.contains(c)) canvas.remove(c); } catch (err) { } });
+            poly.vertexCircles.forEach(c => {
+              try { c.off && c.off(); if (canvas.contains(c)) canvas.remove(c); } catch (err) { /* ignore */ }
+            });
             poly.vertexCircles = [];
           }
-          try { canvas.remove(poly); } catch (err) { }
+          try { canvas.remove(poly); } catch (err) { /* ignore */ }
           activePolygonRef.current = null;
           if (saveAnnotationsRef.current) saveAnnotationsRef.current();
         }
+
       }
     };
     window.addEventListener("keydown", onKeyDown);
