@@ -335,7 +335,7 @@ const Home = () => {
                 setSelectedIds([]);
               }
             }}
-            activeTool={activeTool} annotations={annotations} setAnnotations={handleSetAnnotations} onSelectAnnotation={setSelectedIds}
+            activeTool={activeTool} setActiveTool={setActiveTool} annotations={annotations} setAnnotations={handleSetAnnotations} onSelectAnnotation={setSelectedIds}
           />
         </div>
 

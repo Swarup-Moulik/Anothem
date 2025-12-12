@@ -170,15 +170,15 @@ const COLORS = {
   freehand: { stroke: "#3b82f6", fill: "transparent" },
 };
 
-const AnnotationCanvas = ({ image, setImage, activeTool, annotations, setAnnotations, onSelectAnnotation }) => {
+const AnnotationCanvas = ({ image, setImage, activeTool, setActiveTool, annotations, setAnnotations, onSelectAnnotation }) => {
   const canvasEl = useRef(null);
   const fabricRef = useRef(null);
 
   const isInternalUpdate = useRef(false);
   const saveAnnotationsRef = useRef(null);
   const activeToolRef = useRef(activeTool);
-  const prevToolRef = useRef(activeTool);           
-  const polyLockedRef = useRef(false);  
+  const prevToolRef = useRef(activeTool);
+  const polyLockedRef = useRef(false);
   const activePolygonRef = useRef(null);
 
   const isDragging = useRef(false);
@@ -642,6 +642,10 @@ const AnnotationCanvas = ({ image, setImage, activeTool, annotations, setAnnotat
     poly.set({ selectable: false, lockMovementX: true, lockMovementY: true });
     polyLockedRef.current = true;
     if (saveAnnotationsRef.current) saveAnnotationsRef.current();
+    if (setActiveTool) {
+      setActiveTool("select");
+    }
+    activeToolRef.current = "select";
   }
 
   /* wrapper local makeEditable — used after restore and on activation */
