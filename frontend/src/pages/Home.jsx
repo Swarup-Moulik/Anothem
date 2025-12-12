@@ -30,6 +30,8 @@ const Home = () => {
   // History State
   const [history, setHistory] = useState([[]]);
   const [currentStep, setCurrentStep] = useState(0);
+  const currentStepRef = useRef(currentStep);
+  useEffect(() => { currentStepRef.current = currentStep; }, [currentStep]);
 
   const annotations = history[currentStep] ?? [];
 
@@ -244,13 +246,13 @@ const Home = () => {
 
   // --- HELPERS ---
   const handleSetAnnotations = useCallback((newAnnotations) => {
-    setHistory((prev) => {
-      const newH = prev.slice(0, currentStep + 1);
-      newH.push(JSON.parse(JSON.stringify(newAnnotations || [])));
-      return newH;
+    setHistory(prevHistory => {
+      const base = prevHistory.slice(0, currentStepRef.current + 1);
+      base.push(JSON.parse(JSON.stringify(newAnnotations || [])));
+      return base;
     });
-    setCurrentStep((p) => p + 1);
-  }, [currentStep]);
+    setCurrentStep(prev => prev + 1);
+  }, []);
 
   const handleUndo = () => { if (currentStep > 0) setCurrentStep((p) => p - 1); };
   const handleRedo = () => { if (currentStep < history.length - 1) setCurrentStep((p) => p + 1); };

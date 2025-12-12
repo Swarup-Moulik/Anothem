@@ -186,6 +186,7 @@ const AnnotationCanvas = ({ image, setImage, activeTool, setActiveTool, annotati
   const lastPosY = useRef(0);
   const polyPoints = useRef([]);
   const activeShape = useRef(null);
+  const activeVertexRef = useRef(null);
 
   const [dims, setDims] = useState({ width: 800, height: 600 });
 
@@ -406,67 +407,118 @@ const AnnotationCanvas = ({ image, setImage, activeTool, setActiveTool, annotati
     canvas.off("mouse:down"); canvas.off("mouse:move"); canvas.off("mouse:up");
 
     const onDown = (opt) => {
-      const evt = opt.e; const pointer = canvas.getPointer(evt);
+      const evt = opt.e;
+      const pointer = canvas.getPointer(evt);
 
-      if (activeTool === "pan") { isDragging.current = true; canvas.setCursor("grabbing"); lastPosX.current = evt.clientX; lastPosY.current = evt.clientY; return; }
+      // PAN
+      if (activeToolRef.current === "pan") {
+        isDragging.current = true;
+        canvas.setCursor("grabbing");
+        lastPosX.current = evt.clientX;
+        lastPosY.current = evt.clientY;
+        return;
+      }
 
-      if (activeTool === "select") {
+      // ADD-VERTEX mode (transient): click an edge to insert a vertex, then return to select
+      if (activeToolRef.current === "add-vertex") {
+        if (opt.target && (opt.target.type === "polygon" || opt.target instanceof EditablePolygon)) {
+          const success = insertVertexAt(opt.target, pointer);
+          if (success && setActiveTool) setActiveTool("select");
+        }
+        return;
+      }
+
+      // DELETE-VERTEX mode (transient): click a vertex to remove it, then return to select
+      if (activeToolRef.current === "delete-vertex") {
+        // clicked a vertex handle directly
+        if (opt.target && opt.target._isVertex) {
+          const circ = opt.target;
+          const parentId = circ._parentPolygonId;
+          const parent = canvas.getObjects().find(o => o.id === parentId);
+          if (parent) {
+            removeVertexAt(parent, circ.pointIndex);
+            if (saveAnnotationsRef.current) saveAnnotationsRef.current();
+          }
+          if (setActiveTool) setActiveTool("select");
+          return;
+        }
+
+        // if clicked polygon body, open handles so user can click a vertex
+        if (opt.target && (opt.target.type === "polygon" || opt.target instanceof EditablePolygon)) {
+          if (!opt.target.vertexCircles || opt.target.vertexCircles.length === 0) {
+            createVertexHandles(opt.target, canvas);
+            syncVertexPositions(opt.target);
+            enableVertexDragging(opt.target, canvas);
+          } else {
+            syncVertexPositions(opt.target);
+            enableVertexDragging(opt.target, canvas);
+          }
+          opt.target.vertexCircles.forEach(c => c.set({ visible: true, selectable: true, evented: true }));
+          opt.target.set({ selectable: false, lockMovementX: true, lockMovementY: true });
+          canvas.requestRenderAll();
+        }
+        return;
+      }
+
+      // --- SELECT mode (normal editing / vertex activation) ---
+      if (activeToolRef.current === "select") {
         // If user clicked on something
         if (opt.target) {
           // 1) Clicked a vertex handle itself
           if (opt.target._isVertex) {
-            // find parent polygon by id (stored on the handle)
             const parentId = opt.target._parentPolygonId;
             const parent = canvas.getObjects().find(o => o.id === parentId);
             if (parent) {
-              // mark active polygon
               activePolygonRef.current = parent;
+              activeVertexRef.current = opt.target;
 
-              // Ensure handles exist and handlers are attached
               if (!parent.vertexCircles || parent.vertexCircles.length === 0) {
                 createVertexHandles(parent, canvas);
                 syncVertexPositions(parent);
                 enableVertexDragging(parent, canvas);
               } else {
                 syncVertexPositions(parent);
-                enableVertexDragging(parent, canvas); // reattach handlers if needed
+                enableVertexDragging(parent, canvas);
               }
 
-              // Show & enable handles (and bring them to front so they receive pointer events)
               parent.vertexCircles.forEach(c => {
                 c.set({ visible: true, selectable: true, evented: true });
                 try { canvas.bringToFront(c); } catch (e) { /* ignore */ }
               });
 
-              // Keep polygon above background (so handles are on top visually)
               try { canvas.bringToFront(parent); } catch (e) { /* ignore */ }
 
-              // Do NOT clear handles — allow the handle's own mousedown/move sequence to proceed.
-              // Return early so we don't run the "clear active polygon" code below.
               return;
             }
           }
 
-          // 2) Clicked the polygon body -> activate its handles (user wants to edit vertices)
+          // 2) Clicked the polygon body -> attempt insertion first then open editor
           if (opt.target.type === "polygon" || opt.target instanceof EditablePolygon) {
             // clear previous active polygon handles — HIDE (keep objects)
             if (activePolygonRef.current && activePolygonRef.current !== opt.target) {
               const prev = activePolygonRef.current;
               if (prev.vertexCircles) {
                 prev.vertexCircles.forEach(c => {
-                  try {
-                    // don't remove; just hide and disable eventing so we can reuse them later
-                    c.set({ visible: false, selectable: false, evented: false });
-                  } catch (e) { /* ignore */ }
+                  try { c.set({ visible: false, selectable: false, evented: false }); } catch (e) { /* ignore */ }
                 });
               }
-              // restore polygon to selectable for later clicks
               try { prev.set({ selectable: true, evented: true, lockMovementX: false, lockMovementY: false }); } catch (e) { }
             }
 
+            const inserted = insertVertexAt(opt.target, pointer);
+            if (inserted) {
+              activePolygonRef.current = opt.target;
+              syncVertexPositions(opt.target);
+              enableVertexDragging(opt.target, canvas);
+              opt.target.vertexCircles.forEach(c => { c.set({ visible: true, selectable: true, evented: true }); try { canvas.bringToFront(c); } catch (e) { } });
+              opt.target.set({ selectable: false, lockMovementX: true, lockMovementY: true });
+              canvas.requestRenderAll();
+              if (saveAnnotationsRef.current) saveAnnotationsRef.current();
+              return;
+            }
 
+            // fallback: open vertex editor
             activePolygonRef.current = opt.target;
-
             if (!opt.target.vertexCircles || opt.target.vertexCircles.length === 0) {
               createVertexHandles(opt.target, canvas);
               syncVertexPositions(opt.target);
@@ -482,15 +534,12 @@ const AnnotationCanvas = ({ image, setImage, activeTool, setActiveTool, annotati
             });
             try { canvas.bringToFront(opt.target); } catch (e) { }
 
-            // lock polygon movement while editing vertices
             opt.target.set({ selectable: false, evented: false, lockMovementX: true, lockMovementY: true });
-
             canvas.requestRenderAll();
-            // handled the click — return so we don't clear handles
             return;
           }
 
-          // 3) Clicked some other selectable object — fall through to "clear active polygon" logic below
+          // clicked something else — let selection logic continue (fall through)
         }
 
         // Clicked empty space or non-polygon target: hide previously active polygon handles
@@ -498,24 +547,21 @@ const AnnotationCanvas = ({ image, setImage, activeTool, setActiveTool, annotati
           const prev = activePolygonRef.current;
           if (prev.vertexCircles) {
             prev.vertexCircles.forEach(c => {
-              try {
-                c.set({ visible: false, selectable: false, evented: false });
-              } catch (e) { /* ignore */ }
+              try { c.set({ visible: false, selectable: false, evented: false }); } catch (e) { /* ignore */ }
             });
           }
-          // restore polygon to normal (allow selecting it later)
           try { prev.set({ selectable: true, evented: true, lockMovementX: false, lockMovementY: false }); } catch (e) { }
           activePolygonRef.current = null;
+          activeVertexRef.current = null;
           canvas.requestRenderAll();
         }
 
         return;
       }
 
-      if (activeTool === "polygon") {
-        if (polyLockedRef.current) {
-          return;
-        }
+      // --- POLYGON DRAWING MODE ---
+      if (activeToolRef.current === "polygon") {
+        if (polyLockedRef.current) return;
         if (polyPoints.current.length > 2) {
           const start = polyPoints.current[0];
           const dist = Math.hypot(pointer.x - start.x, pointer.y - start.y);
@@ -586,6 +632,22 @@ const AnnotationCanvas = ({ image, setImage, activeTool, setActiveTool, annotati
 
     const onKeyDown = (e) => {
       if (e.key === "Delete" || e.key === "Del") {
+        const canvas = fabricRef.current;
+        // If a vertex is selected, remove that vertex
+        if (activeVertexRef.current && canvas) {
+          const circ = activeVertexRef.current;
+          const parentId = circ._parentPolygonId;
+          const poly = canvas.getObjects().find(o => o.id === parentId);
+          if (poly) {
+            const idx = circ.pointIndex;
+            removeVertexAt(poly, idx);
+            if (saveAnnotationsRef.current) saveAnnotationsRef.current();
+          }
+          activeVertexRef.current = null;
+          return;
+        }
+
+        // otherwise, fallback to removing entire active polygon (existing behaviour)
         const poly = activePolygonRef.current;
         if (poly && canvas) {
           if (poly.vertexCircles) {
@@ -598,9 +660,9 @@ const AnnotationCanvas = ({ image, setImage, activeTool, setActiveTool, annotati
           activePolygonRef.current = null;
           if (saveAnnotationsRef.current) saveAnnotationsRef.current();
         }
-
       }
     };
+
     window.addEventListener("keydown", onKeyDown);
 
     return () => { canvas.off("mouse:down", onDown); canvas.off("mouse:move", onMove); canvas.off("mouse:up", onUp); canvas.off("mouse:dblclick", finishPolygonLocal); window.removeEventListener("keydown", onKeyDown); };
@@ -647,6 +709,114 @@ const AnnotationCanvas = ({ image, setImage, activeTool, setActiveTool, annotati
     }
     activeToolRef.current = "select";
   }
+
+  /* Insert a new vertex at screen pointer into polygon (on nearest edge) */
+  function insertVertexAt(poly, screenPointer) {
+    const canvas = fabricRef.current;
+    if (!poly || !canvas) return false;
+
+    // get transform matrix and pathOffset
+    const m = poly.calcTransformMatrix();
+    const inv = fabric.util.invertTransform(m);
+    const ox = poly.pathOffset?.x || 0;
+    const oy = poly.pathOffset?.y || 0;
+
+    // convert screen -> poly local coords
+    const local = fabric.util.transformPoint(new fabric.Point(screenPointer.x, screenPointer.y), inv);
+    const newPointLocal = { x: local.x + ox, y: local.y + oy };
+
+    // compute closest segment in screen space
+    const screens = (poly.points || []).map(p => {
+      return fabric.util.transformPoint(new fabric.Point(p.x - ox, p.y - oy), m);
+    });
+
+    if (screens.length < 2) return false;
+
+    // find nearest segment index and distance
+    let bestIdx = -1, bestDist = Infinity;
+    for (let i = 0; i < screens.length; i++) {
+      const a = screens[i];
+      const b = screens[(i + 1) % screens.length];
+      // distance from point to segment (screen coords)
+      const d = pointToSegmentDistance(screenPointer, a, b);
+      if (d < bestDist) { bestDist = d; bestIdx = i; }
+    }
+
+    // only insert if click is close enough (threshold in screen pixels)
+    const THRESH = 8;
+    if (bestDist > THRESH) return false;
+
+    // Insert in points array at bestIdx+1 using local coordinates
+    poly.points.splice(bestIdx + 1, 0, newPointLocal);
+
+    // rebuild handles
+    if (poly.vertexCircles) {
+      poly.vertexCircles.forEach(c => { try { c.off && c.off(); if (canvas.contains(c)) canvas.remove(c); } catch (e) { } });
+      poly.vertexCircles = [];
+    }
+    createVertexHandles(poly, canvas);
+    syncVertexPositions(poly);
+    enableVertexDragging(poly, canvas);
+
+    // keep polygon locked for editing (same behaviour as when activating)
+    poly.set({ selectable: false, lockMovementX: true, lockMovementY: true });
+    canvas.requestRenderAll();
+    try { canvas.fire("vertex:modified"); } catch (e) { }
+    return true;
+  }
+
+  /* Remove vertex at index from polygon. If resulting vertex count < 3, remove polygon entirely */
+  function removeVertexAt(poly, idx) {
+    const canvas = fabricRef.current;
+    if (!poly || !canvas) return;
+    if (idx == null || idx < 0 || idx >= (poly.points || []).length) return;
+
+    poly.points.splice(idx, 1);
+    if (!poly.points || poly.points.length < 3) {
+      // remove polygon
+      if (poly.vertexCircles) {
+        poly.vertexCircles.forEach(c => {
+          try { c.off && c.off(); if (canvas.contains(c)) canvas.remove(c); } catch (e) { }
+        });
+        poly.vertexCircles = [];
+      }
+      try { canvas.remove(poly); } catch (err) { /* ignore */ }
+      activePolygonRef.current = null;
+      activeVertexRef.current = null;
+      if (saveAnnotationsRef.current) saveAnnotationsRef.current();
+      canvas.requestRenderAll();
+      return;
+    }
+
+    // otherwise rebuild handles and sync
+    if (poly.vertexCircles) {
+      poly.vertexCircles.forEach(c => { try { c.off && c.off(); if (canvas.contains(c)) canvas.remove(c); } catch (e) { } });
+      poly.vertexCircles = [];
+    }
+    createVertexHandles(poly, canvas);
+    enableVertexDragging(poly, canvas);
+    syncVertexPositions(poly);
+
+    // clear vertex selection
+    activeVertexRef.current = null;
+    canvas.requestRenderAll();
+    try { canvas.fire("vertex:modified"); } catch (e) { }
+  }
+
+  /* helper: distance from point P to segment AB (all points are {x,y}) */
+  function pointToSegmentDistance(p, a, b) {
+    const vx = b.x - a.x, vy = b.y - a.y;
+    const wx = p.x - a.x, wy = p.y - a.y;
+    const c1 = vx * wx + vy * wy;
+    if (c1 <= 0) return Math.hypot(p.x - a.x, p.y - a.y);
+    const c2 = vx * vx + vy * vy;
+    if (c2 <= c1) return Math.hypot(p.x - b.x, p.y - b.y);
+    const t = c1 / c2;
+    const projx = a.x + t * vx;
+    const projy = a.y + t * vy;
+    return Math.hypot(p.x - projx, p.y - projy);
+  }
+
 
   /* wrapper local makeEditable — used after restore and on activation */
   function makePolygonEditableLocal(poly) {
