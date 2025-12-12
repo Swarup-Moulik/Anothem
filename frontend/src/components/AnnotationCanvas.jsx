@@ -191,14 +191,29 @@ const AnnotationCanvas = ({ image, setImage, activeTool, setActiveTool, annotati
   const [dims, setDims] = useState({ width: 800, height: 600 });
 
   useEffect(() => {
-    // If user changed tool and now it's polygon and previously it wasn't polygon -> unlock
     if (activeTool === "polygon" && prevToolRef.current !== "polygon") {
       polyLockedRef.current = false;
       polyPoints.current = [];
     }
     prevToolRef.current = activeTool;
     activeToolRef.current = activeTool;
+
+    // clear any active vertex selection when not in select mode
+    if (activeTool !== "select") {
+      activeVertexRef.current = null;
+    }
+    if (activeTool !== "select" && activeTool !== "add-vertex" && activeTool !== "delete-vertex") {
+      const canvas = fabricRef.current;
+      if (canvas) {
+        canvas.getObjects().forEach(o => {
+          if (o.vertexCircles) {
+            o.vertexCircles.forEach(c => { try { c.set({ visible: false, selectable: false, evented: false }); } catch (e) { } });
+          }
+        });
+      }
+    }
   }, [activeTool]);
+
 
   /* init canvas */
   useEffect(() => {
@@ -386,7 +401,8 @@ const AnnotationCanvas = ({ image, setImage, activeTool, setActiveTool, annotati
       }
 
       // Make polygon itself selectable when in select tool (so user can click it to activate vertex editing)
-      obj.set({ selectable: activeTool === "select", evented: activeTool === "select" });
+      const polygonInteractive = (activeTool === "select" || activeTool === "add-vertex" || activeTool === "delete-vertex");
+      obj.set({ selectable: activeTool === "select", evented: polygonInteractive });
 
       // Hide handles by default; they become visible when user clicks the polygon (see onDown)
       if (obj.vertexCircles) {
