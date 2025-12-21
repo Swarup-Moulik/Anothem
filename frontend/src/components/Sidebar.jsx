@@ -78,7 +78,7 @@ const Sidebar = ({
   };
 
   return (
-    <div className="w-80 shrink-0 bg-white border-l border-gray-300 flex flex-col h-full max-h-full overflow-hidden shadow-sm">
+    <div className="w-full shrink-0 bg-white border-l border-gray-300 flex flex-col h-full max-h-full overflow-hidden shadow-sm">
       {/* --- LABELS SECTION --- */}
       <div className='mb-6 border-b pb-2'>
         <div className='flex justify-between items-center mb-3'>
