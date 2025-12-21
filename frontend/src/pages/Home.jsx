@@ -374,7 +374,7 @@ const Home = () => {
 
       {/* MAIN WORKSPACE */}
       <main
-        className="flex flex-1 relative overflow-hidden"
+        className="flex flex-1 relative overflow-hidden h-full"
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
