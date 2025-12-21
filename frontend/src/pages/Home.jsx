@@ -327,7 +327,7 @@ const Home = () => {
   }, [unsavedFile]);
 
   return (
-    <div className="bg-gray-50 min-h-screen flex flex-col relative">
+    <div className="bg-gray-50 h-screen flex flex-col relative">
       <Toaster position="top-center" reverseOrder={false} />
       <header className="flex justify-between items-center px-1 md:px-4 py-2 border-b border-gray-300 bg-white shrink-0 gap-2">
         <div className="flex items-center md:gap-3">
@@ -433,7 +433,7 @@ const Home = () => {
         <div
           className={`
             fixed md:static inset-y-0 right-0 z-40 w-90 md:m-4
-            h-full max-h-screen
+            h-full max-h-screen flex flex-col min-h-0
             transform transition-transform duration-300 ease-in-out
             shadow-xl md:shadow-none
             ${
