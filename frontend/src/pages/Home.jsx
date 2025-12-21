@@ -433,7 +433,7 @@ const Home = () => {
         <div
           className={`
             fixed md:static inset-y-0 right-0 z-40 w-90 md:m-4
-            h-full max-h-screen flex flex-col min-h-0
+            max-h-screen flex flex-col min-h-0
             transform transition-transform duration-300 ease-in-out
             shadow-xl md:shadow-none
             ${

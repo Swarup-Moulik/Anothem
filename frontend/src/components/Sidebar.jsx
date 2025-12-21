@@ -78,7 +78,7 @@ const Sidebar = ({
   };
 
   return (
-    <div className="w-90 p-3 shrink-0 bg-white border-l border-gray-300 flex flex-col h-full overflow-hidden shadow-sm">
+    <div className="w-90 p-3 shrink-0 bg-white border-l border-gray-300 flex flex-col max-h-full overflow-hidden shadow-sm">
       {/* --- LABELS SECTION --- */}
       <div className='mb-6 border-b pb-2'>
         <div className='flex justify-between items-center mb-3'>
@@ -120,7 +120,7 @@ const Sidebar = ({
            Annotations <span className="text-gray-400 text-sm font-normal">({annotations.length})</span>
         </h3>
         
-        <div className='flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-2'>
+        <div className='flex-1 overflow-y-auto pr-2 space-y-2 scrollbar-thin scrollbar-thumb-slate-400 scrollbar-track-transparent hover:scrollbar-thumb-slate-500'>
           {annotations.length > 0 ? (
             annotations.map((annotation, index) => {
               const isSelected = selectedIds.includes(annotation.id);
