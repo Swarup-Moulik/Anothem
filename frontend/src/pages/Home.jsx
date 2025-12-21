@@ -327,7 +327,7 @@ const Home = () => {
   }, [unsavedFile]);
 
   return (
-    <div className="bg-gray-50 h-screen flex flex-col relative">
+    <div className="bg-gray-50 min-h-screen flex flex-col relative">
       <Toaster position="top-center" reverseOrder={false} />
       <header className="flex justify-between items-center px-1 md:px-4 py-2 border-b border-gray-300 bg-white shrink-0 gap-2">
         <div className="flex items-center md:gap-3">
